@@ -9,6 +9,13 @@ namespace chess
   {
     public int x;
     public int y;
+    public Position Copy()
+    {
+      Position newPos = new Position();
+      newPos.x = this.x;
+      newPos.y = this.y;
+      return newPos;
+    }
   }
   class Game
   {
@@ -74,77 +81,17 @@ namespace chess
         case -3:
           // check to top/right
           {
-            Position newPos = new Position();
-            newPos.y = pos.y - 1;
-            newPos.x = pos.x + 1;
-            while (newPos.y > 1 && newPos.x < 10)
+            int someFunc(Position inputPos)
             {
-              int piece = board[newPos.y, newPos.x];
-              if (piece != 0)
-              {
-                if (TryMove(pos, newPos, board)) moves.Add(newPos);
-                break;
-              }
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              newPos.y--;
-              newPos.x++;
+              int curPiece = board[inputPos.y, inputPos.x];
+              if (TryMove(pos, inputPos, board)) return 1;
+              if (curPiece != 0) return -1;
+              return 0;
             }
+            Position[] newMoves = Diagonally(pos, someFunc);
+            moves.AddRange(newMoves);
+            break;
           }
-          // check to bottom/right
-          {
-            Position newPos = new Position();
-            newPos.y = pos.y + 1;
-            newPos.x = pos.x + 1;
-            while (newPos.y < 10 && newPos.x < 10)
-            {
-              int piece = board[newPos.y, newPos.x];
-              if (piece != 0)
-              {
-                if (TryMove(pos, newPos, board)) moves.Add(newPos);
-                break;
-              }
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              newPos.y++;
-              newPos.x++;
-            }
-          }
-          // check to bottom/left
-          {
-            Position newPos = new Position();
-            newPos.y = pos.y + 1;
-            newPos.x = pos.x - 1;
-            while (newPos.y < 10 && newPos.x > 1)
-            {
-              int piece = board[newPos.y, newPos.x];
-              if (piece != 0)
-              {
-                if (TryMove(pos, newPos, board)) moves.Add(newPos);
-                break;
-              }
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              newPos.y++;
-              newPos.x--;
-            }
-          }
-          // check to top/left
-          {
-            Position newPos = new Position();
-            newPos.y = pos.y - 1;
-            newPos.x = pos.x - 1;
-            while (newPos.y > 1 && newPos.x > 1)
-            {
-              int piece = board[newPos.y, newPos.x];
-              if (piece != 0)
-              {
-                if (TryMove(pos, newPos, board)) moves.Add(newPos);
-                break;
-              }
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              newPos.y--;
-              newPos.x--;
-            }
-          }
-          break;
         case 4:
         case -4:
           // check to the top
@@ -222,6 +169,59 @@ namespace chess
         default:
           return new Position[0];
       }
+      return moves.ToArray();
+    }
+
+    private Position[] Diagonally(Position start, Func<Position, int> function)
+    {
+      List<Position> moves = new List<Position>();
+      Position copy = start.Copy(); // making a copy to not alter the input "start"
+
+      // check to top/right
+      while (copy.y > 1 && copy.x < 10)
+      {
+        copy.y--;
+        copy.x++;
+        int reply = function(copy);
+        if (reply == 1) moves.Add(copy);
+        else if (reply == -1) break;
+      }
+      copy = start.Copy();
+
+      // check to bottom/right
+      while (copy.y < 10 && copy.x < 10)
+      {
+        copy.y++;
+        copy.x++;
+        int reply = function(copy);
+        if (reply == 1) moves.Add(copy);
+        else if (reply == -1) break;
+      }
+      copy = start.Copy();
+
+      // check to bottom/left
+      while (copy.y < 10 && copy.x > 1)
+      {
+        copy.y++;
+        copy.x--;
+        int reply = function(copy);
+        if (reply == 1) moves.Add(copy);
+        else if (reply == -1) break;
+      }
+      copy = start.Copy();
+
+      // check to top/left
+      while (copy.y > 1 && copy.x > 1)
+      {
+        copy.y--;
+        copy.x--;
+        int reply = function(copy);
+        if (reply == 1) moves.Add(copy);
+        else if (reply == -1) break;
+      }
+      copy = start.Copy();
+
+
       return moves.ToArray();
     }
 
@@ -377,7 +377,7 @@ namespace chess
         {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
         {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
         {7, 7, 4, 2, 3, 5, 6, 3, 2, 4, 7, 7},
-        {7, 7, 1, 1, 1, 1, 1, 1, 1, 1, 7, 7},
+        {7, 7, 1, 0, 1, 1, 1, 1, 1, 1, 7, 7},
         {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
         {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
         {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
