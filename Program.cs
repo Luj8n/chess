@@ -6,25 +6,21 @@ namespace chess
   {
     static void Main(string[] args)
     {
-      Console.WriteLine("Start");
-
       Game game1 = new Game(false);
 
-      game1.DisplayBoard();
+      // game1.DisplayBoard(game1.BOARD);
 
-      Position[] pos = game1.ConvertMove(new string[2] { "a2", "a4" });
+      Position[] positions = game1.AvailableMoves(game1.ConvertPos("c1"), game1.BOARD);
 
-      Console.Write(pos[0].x);
-      Console.Write(" ");
-      Console.Write(pos[0].y);
+      foreach (Position pos in positions)
+      {
+        Console.Write(pos.x);
+        Console.Write(" ");
+        Console.Write(pos.y);
+        Console.WriteLine("");
+      }
 
-      Console.WriteLine();
-
-      Console.Write(pos[1].x);
-      Console.Write(" ");
-      Console.Write(pos[1].y);
-
-      Console.WriteLine("End");
+      // Console.WriteLine(game1.IsCheck(game1.BOARD));
     }
   }
 }
