@@ -23,206 +23,445 @@ namespace chess
     // but it's flipped: white is top, black is bottom (easier this way)
     public int[,] BOARD;
 
-    private bool whitesTurn; // if true, it is white's turn, else - black's
-
-    private int[,] knightRelativeMoves = new int[8, 2] { { -2, 1 }, { -1, 2 }, { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 }, { -1, -2 }, { -2, -1 } };
-
-    private int InCheck = 0; // -1 - black. 1 - white. 0 - no one
-
-
     public Game(bool withAi)
     {
       if (withAi) throw new Exception("Ai is not supported yet");
 
       BOARD = NewBoard();
-      whitesTurn = true;
     }
 
-    public bool TryMove(Position from, Position to, int[,] board)
+    public int Move(Position from, Position to, int[,] board)
     {
+      // returns 0 if nothing happens
+      // returns 1 if white is being checked
+      // returns -1 if black is being checked
+      // returns 2 if white is being checkmated
+      // returns -2 if black is being checkmated
+
+      // trusting the input to be a legal move
+      board[to.y, to.x] = board[from.y, from.x];
+      board[from.y, from.x] = 0;
+      int inCheck = IsCheck(board);  // -1 - black. 1 - white. 0 - no one
+
+      if (inCheck == 1)
+      {
+        if (GetWhiteMoves(board).Length == 0) return 2;
+        return 1;
+      }
+
+      if (inCheck == -1)
+      {
+        if (GetBlackMoves(board).Length == 0) return -2;
+        return -1;
+      }
+
+      return 0;
+    }
+
+    public Position[][][] GetBlackMoves(int[,] board)
+    {
+      List<Position[][]> allMoves = new List<Position[][]>();
+
+      for (int y = 2; y < 10; y++)
+      {
+        for (int x = 2; x < 10; x++)
+        {
+          if (board[y, x] >= 0) continue;
+          Position newPos = new Position();
+          newPos.x = x; newPos.y = y;
+          Position[][] newMoves = Moves(newPos, board);
+
+          if (newMoves.Length != 0) allMoves.Add(newMoves);
+        }
+      }
+
+      return allMoves.ToArray();
+    }
+
+    public Position[][][] GetWhiteMoves(int[,] board)
+    {
+      List<Position[][]> allMoves = new List<Position[][]>();
+
+      for (int y = 2; y < 10; y++)
+      {
+        for (int x = 2; x < 10; x++)
+        {
+          if (board[y, x] <= 0) continue;
+
+          Position newPos = new Position();
+          newPos.x = x; newPos.y = y;
+          Position[][] newMoves = Moves(newPos, board);
+
+          if (newMoves.Length != 0) allMoves.Add(newMoves);
+        }
+      }
+
+      return allMoves.ToArray();
+    }
+
+    public Position[][][] GetAllMoves(int[,] board)
+    {
+      List<Position[][]> allMoves = new List<Position[][]>();
+
+      for (int y = 2; y < 10; y++)
+      {
+        for (int x = 2; x < 10; x++)
+        {
+          if (board[y, x] == 0) continue;
+
+          Position newPos = new Position();
+          newPos.x = x; newPos.y = y;
+          Position[][] newMoves = Moves(newPos, board);
+
+          allMoves.Add(newMoves);
+        }
+      }
+
+      return allMoves.ToArray();
+    }
+
+    private int TryMove(Position from, Position to, int[,] board)
+    {
+      // returns 0 if it's not possible (tried attacking your own piece)
+      // returns 1 if that square is empty and possible to go to
+      // returns 2 if it will be a possible capture
+      // returns 3 if it will be an impossible capture (will be check)
+      // returns 4 if that square is empty and impossible to go to (will be check)
+      // returns 5 if that square is not on the board
       int fromPiece = board[from.y, from.x];
       int toPiece = board[to.y, to.x];
 
-      int fromPieceSide = fromPiece / Math.Abs(fromPiece); // -1 - black. 1 - white
-      if (toPiece == 0) goto someLabel;
+      if (toPiece == 7) return 5;
 
-      // avoid this if toPiece is 0
-      int toPieceSide = toPiece / Math.Abs(toPiece); // -1 - black. 1 - white
-      if (toPieceSide != fromPieceSide) goto someLabel;
-      return false; // cant attack your own piece
-    someLabel:;
-      // copy board
+      int fromPieceSide = fromPiece / Math.Abs(fromPiece); // -1 - black. 1 - white
+
+      // copy board and move the piece to the square
       int[,] newBoard = board.Clone() as int[,];
       newBoard[to.y, to.x] = fromPiece;
       newBoard[from.y, from.x] = 0;
-      if (IsCheck(newBoard) == fromPieceSide) return false; // cant make yourself check
-      return true;
+
+      if (toPiece != 0)
+      {
+        int toPieceSide = toPiece / Math.Abs(toPiece); // -1 - black. 1 - white
+        if (toPieceSide == fromPieceSide) return 0; // cant attack your own piece
+        // check if it will be check next move. YOU CANT MAKE YOURSELF CHECK!
+        if (IsCheck(newBoard) == fromPieceSide) return 3; // cant make yourself check
+        return 2;
+      }
+      // check if it will be check next move. YOU CANT MAKE YOURSELF CHECK!
+      if (IsCheck(newBoard) == fromPieceSide) return 3; // cant make yourself check
+      return 1; // everything is fine, so return true
     }
 
-    public Position[] AvailableMoves(Position pos, int[,] board)
+    public Position[][] Moves(Position initialPos, int[,] board)
     {
-      // gets available moves for a piece that is in pos
-      int oldPiece = board[pos.y, pos.x];
-      int oldSide = oldPiece / Math.Abs(oldPiece); // -1 - black. 1 - white
-      List<Position> moves = new List<Position>();
-      switch (board[pos.y, pos.x])
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+
+      int piece = board[initialPos.y, initialPos.x];
+      switch (piece)
       {
-        case 2: // knight
-        case -2:
-          for (int i = 0; i < 8; i++)
-          {
-            Position newPos = new Position();
-            newPos.x = pos.x + knightRelativeMoves[i, 1];
-            newPos.y = pos.y + knightRelativeMoves[i, 0];
-            if (TryMove(pos, newPos, board)) moves.Add(newPos);
-          }
-          break;
-        case 3: // bishop
-        case -3:
-          // check to top/right
-          {
-            int someFunc(Position inputPos)
-            {
-              int curPiece = board[inputPos.y, inputPos.x];
-              if (TryMove(pos, inputPos, board)) return 1;
-              if (curPiece != 0) return -1;
-              return 0;
-            }
-            Position[] newMoves = Diagonally(pos, someFunc);
-            moves.AddRange(newMoves);
-            break;
-          }
+        case 1:
+        case -1:
+          return PawnMoves(initialPos, board);
+        case 6:
+        case -6:
+          return KingMoves(initialPos, board);
+        case 5:
+        case -5:
+          return QueenMoves(initialPos, board);
         case 4:
         case -4:
-          // check to the top
-          for (int y = pos.y - 1; y > 1; y--)
-          {
-            Position newPos = new Position();
-            newPos.y = y;
-            newPos.x = pos.x;
-            int piece = board[newPos.y, newPos.x];
-            if (piece != 0)
-            {
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              break;
-            }
-            if (TryMove(pos, newPos, board)) moves.Add(newPos);
-          }
-          // check to the bottom
-          for (int y = pos.y + 1; y < 10; y++)
-          {
-            Position newPos = new Position();
-            newPos.y = y;
-            newPos.x = pos.x;
-            int piece = board[newPos.y, newPos.x];
-            if (piece != 0)
-            {
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              break;
-            }
-            if (TryMove(pos, newPos, board)) moves.Add(newPos);
-          }
-          // check to the left
-          for (int x = pos.x - 1; x > 1; x--)
-          {
-            Position newPos = new Position();
-            newPos.y = pos.y;
-            newPos.x = x;
-            int piece = board[newPos.y, newPos.x];
-            if (piece != 0)
-            {
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              break;
-            }
-            if (TryMove(pos, newPos, board)) moves.Add(newPos);
-          }
-          // check to the right
-          for (int x = pos.x + 1; x < 10; x++)
-          {
-            Position newPos = new Position();
-            newPos.y = pos.y;
-            newPos.x = x;
-            int piece = board[newPos.y, newPos.x];
-            if (piece != 0)
-            {
-              if (TryMove(pos, newPos, board)) moves.Add(newPos);
-              break;
-            }
-            if (TryMove(pos, newPos, board)) moves.Add(newPos);
-          }
-          break;
-        // case 1:
-        //   {
-        //     // check if is on the first line
-        //     Position newPos = new Position();
-        //     newPos.y = pos.y + 1;
-        //     newPos.x = pos.x;
-        //     if (TryMove(pos, newPos, board)) moves.Add(newPos);
-        //     if (pos.y == 3)
-        //     {
-        //       newPos.y = pos.y + 1;
-        //       if (TryMove(pos, newPos, board)) moves.Add(newPos);
-
-        //     }
-        //     break;
-        //   }
-        default:
-          return new Position[0];
+          return RookMoves(initialPos, board);
+        case 3:
+        case -3:
+          return BishopMoves(initialPos, board);
+        case 2:
+        case -2:
+          return KnightMoves(initialPos, board);
+        default: // empty square
+          return new Position[][] { };
       }
-      return moves.ToArray();
     }
 
-    private Position[] Diagonally(Position start, Func<Position, int> function)
+    private Position[][] PawnMoves(Position initialPos, int[,] board)
     {
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+
       List<Position> moves = new List<Position>();
-      Position copy = start.Copy(); // making a copy to not alter the input "start"
+      List<Position> captures = new List<Position>();
+      Position pos = initialPos.Copy(); // making a copy to not alter the input pos
+
+      int piece = board[initialPos.y, initialPos.x];
+      int side = piece / Math.Abs(piece); // -1 - black. 1 - white
+
+      int justMove(Position inputPos)
+      {
+        int result = TryMove(initialPos, inputPos, board);
+        if (result == 1) moves.Add(inputPos);
+        if (result == 3 || result == 2 || result == 0) return 0; // stop checking
+        return 1; // dont stop checking
+      }
+
+      void justCapture(Position inputPos)
+      {
+        int result = TryMove(initialPos, inputPos, board);
+        if (result == 2) captures.Add(inputPos);
+      }
+
+      // check one square to the up/down (depending on the side)
+      if (side == 1)
+      {
+        pos.y = initialPos.y + 1;
+        if (justMove(pos) == 1 && pos.y == 4) // second white row
+        {
+          pos.y++;
+          justMove(pos);
+          pos.y--;
+        }
+      }
+      else
+      {
+        pos.y = initialPos.y - 1;
+        justMove(pos);
+        if (justMove(pos) == 1 && pos.y == 7) // second black row
+        {
+          pos.y--;
+          justMove(pos);
+          pos.y++;
+        }
+      }
+
+      // check diagonally (left)
+      pos.x = initialPos.x - 1;
+      justCapture(pos);
+
+      // check diagonally (right)
+      pos.x = initialPos.x + 1;
+      justCapture(pos);
+
+      return new Position[][] { moves.ToArray(), captures.ToArray() };
+    }
+
+    private Position[][] KingMoves(Position initialPos, int[,] board)
+    {
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+
+      List<Position> moves = new List<Position>();
+      List<Position> captures = new List<Position>();
+      Position pos = initialPos.Copy(); // making a copy to not alter the input pos
+
+      void process(Position inputPos)
+      {
+        int result = TryMove(initialPos, inputPos, board);
+        if (result == 2) captures.Add(inputPos);
+        if (result == 1) moves.Add(inputPos);
+      }
+
+      // check three squares above
+      pos.y = initialPos.y - 1;
+      pos.x = initialPos.x - 1;
+      for (int i = 0; i < 3; i++) { process(pos); pos.x++; };
+      pos = initialPos.Copy(); // reseting the position to the initial position
+
+      // check one square to the right
+      pos.x++;
+      process(pos);
+      pos = initialPos.Copy(); // reseting the position to the initial position
+
+      // check three squares below
+      pos.y = initialPos.y + 1;
+      pos.x = initialPos.x - 1;
+      for (int i = 0; i < 3; i++) { process(pos); pos.x++; };
+      pos = initialPos.Copy(); // reseting the position to the initial position
+
+      // check one square to the left
+      pos.x--;
+      process(pos);
+
+      return new Position[][] { moves.ToArray(), captures.ToArray() };
+    }
+
+    private Position[][] QueenMoves(Position initialPos, int[,] board)
+    {
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+
+      List<Position> moves = new List<Position>();
+      List<Position> captures = new List<Position>();
+
+      Position[][] bishopLike = BishopMoves(initialPos, board);
+      Position[][] rookLike = RookMoves(initialPos, board);
+
+      moves.AddRange(bishopLike[0]);
+      moves.AddRange(rookLike[0]);
+
+      captures.AddRange(bishopLike[1]);
+      captures.AddRange(rookLike[1]);
+
+      return new Position[][] { moves.ToArray(), captures.ToArray() };
+    }
+
+    private Position[][] RookMoves(Position initialPos, int[,] board)
+    {
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+      List<Position> moves = new List<Position>();
+      List<Position> captures = new List<Position>();
+      Position pos = initialPos.Copy(); // making a copy to not alter the input pos
+
+      int process(Position inputPos)
+      {
+        int result = TryMove(initialPos, inputPos, board);
+        if (result == 2) captures.Add(inputPos);
+        if (result == 1) moves.Add(inputPos);
+        if (result == 3 || result == 2 || result == 0) return 0; // stop checking
+        return 1; // dont stop checking
+      }
+
+      // check to top
+      while (pos.y > 1) { pos.y--; if (process(pos) == 0) break; }
+      pos = initialPos.Copy(); // reseting the position to the initial position
+
+      // check to right
+      while (pos.x < 10) { pos.x++; if (process(pos) == 0) break; }
+      pos = initialPos.Copy(); // reseting the position to the initial position
+
+      // check to bottom
+      while (pos.y < 10) { pos.y++; if (process(pos) == 0) break; }
+      pos = initialPos.Copy(); // reseting the position to the initial position
+
+      // check to left
+      while (pos.x > 1) { pos.x--; if (process(pos) == 0) break; }
+
+      return new Position[][] { moves.ToArray(), captures.ToArray() };
+    }
+
+    private Position[][] BishopMoves(Position initialPos, int[,] board)
+    {
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+      List<Position> moves = new List<Position>();
+      List<Position> captures = new List<Position>();
+      Position pos = initialPos.Copy(); // making a copy to not alter the input pos
+
+      int process(Position inputPos)
+      {
+        int result = TryMove(initialPos, inputPos, board);
+        if (result == 2) captures.Add(inputPos);
+        if (result == 1) moves.Add(inputPos);
+        if (result == 3 || result == 2 || result == 0) return 0; // stop checking
+        return 1; // dont stop checking
+      }
 
       // check to top/right
-      while (copy.y > 1 && copy.x < 10)
-      {
-        copy.y--;
-        copy.x++;
-        int reply = function(copy);
-        if (reply == 1) moves.Add(copy);
-        else if (reply == -1) break;
-      }
-      copy = start.Copy();
+      while (pos.y > 1 && pos.x < 10) { pos.y--; pos.x++; if (process(pos) == 0) break; }
+      pos = initialPos.Copy(); // reseting the position to the initial position
 
       // check to bottom/right
-      while (copy.y < 10 && copy.x < 10)
-      {
-        copy.y++;
-        copy.x++;
-        int reply = function(copy);
-        if (reply == 1) moves.Add(copy);
-        else if (reply == -1) break;
-      }
-      copy = start.Copy();
+      while (pos.y < 10 && pos.x < 10) { pos.y++; pos.x++; if (process(pos) == 0) break; }
+      pos = initialPos.Copy(); // reseting the position to the initial position
 
       // check to bottom/left
-      while (copy.y < 10 && copy.x > 1)
-      {
-        copy.y++;
-        copy.x--;
-        int reply = function(copy);
-        if (reply == 1) moves.Add(copy);
-        else if (reply == -1) break;
-      }
-      copy = start.Copy();
+      while (pos.y < 10 && pos.x > 1) { pos.y++; pos.x--; if (process(pos) == 0) break; }
+      pos = initialPos.Copy(); // reseting the position to the initial position
 
       // check to top/left
-      while (copy.y > 1 && copy.x > 1)
+      while (pos.y > 1 && pos.x > 1) { pos.y--; pos.x--; if (process(pos) == 0) break; }
+
+      return new Position[][] { moves.ToArray(), captures.ToArray() };
+    }
+
+    private Position[][] KnightMoves(Position initialPos, int[,] board)
+    {
+      // return 2 arrays in an array. first one is possible moves on empty squares, second is possible captures
+      List<Position> moves = new List<Position>();
+      List<Position> captures = new List<Position>();
+      Position pos = initialPos.Copy(); // making a copy to not alter the input pos
+
+      int[,] relativeMoves = new int[8, 2] { { -2, 1 }, { -1, 2 }, { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 }, { -1, -2 }, { -2, -1 } };
+
+      for (int i = 0; i < 8; i++)
       {
-        copy.y--;
-        copy.x--;
-        int reply = function(copy);
-        if (reply == 1) moves.Add(copy);
-        else if (reply == -1) break;
+        pos.y = initialPos.y + relativeMoves[i, 0];
+        pos.x = initialPos.x + relativeMoves[i, 1];
+        int result = TryMove(initialPos, pos, board);
+        if (result == 2) captures.Add(pos);
+        if (result == 1) moves.Add(pos);
       }
-      copy = start.Copy();
 
+      return new Position[][] { moves.ToArray(), captures.ToArray() };
+    }
 
-      return moves.ToArray();
+    public Position[] FindPieces(int piece, int[,] board)
+    {
+      // finds the positions of the pieces to find
+      List<Position> found = new List<Position>();
+      for (int y = 2; y < 10; y++)
+      {
+        for (int x = 2; x < 10; x++)
+        {
+          if (board[y, x] == piece)
+          {
+            Position pos = new Position();
+            pos.x = x;
+            pos.y = y;
+            found.Add(pos);
+          }
+        }
+      }
+      // return an array
+      return found.ToArray();
+    }
+
+    public Position ConvertPos(string move)
+    {
+      // for example: move is a1. it will return Position with x = 2, y = 2
+      Position pos = new Position();
+      pos.x = (char.ToUpper(move[0])) - 63; // converts character to its alphabet integer position
+      pos.y = int.Parse(move[1].ToString()) + 1;
+      return pos;
+    }
+
+    public string ConvertPos(Position pos)
+    {
+      // for example: Position's x = 2, y = 2. it will return a string "a1"
+      string move = "";
+      move += (char)(pos.x + 63);
+      move += pos.y - 1;
+      return move.ToLower();
+    }
+
+    private int[,] NewBoard()
+    {
+      int[,] board = new int[12, 12] {
+        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+        {7, 7, 4, 2, 3, 5, 6, 3, 2, 4, 7, 7},
+        {7, 7, 1, 1, 1, 1, 1, 1, 1, 1, 7, 7},
+        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
+        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
+        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
+        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
+        {7, 7,-1,-1,-1,-1,-1,-1,-1,-1, 7, 7},
+        {7, 7,-4,-2,-3,-5,-6,-3,-2,-4, 7, 7},
+        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7}
+      };
+      return board;
+    }
+
+    public void DisplayBoard(int[,] board)
+    {
+      Console.Clear();
+      Console.WriteLine("------------------------");
+      for (int y = 2; y < 10; y++)
+      {
+        for (int x = 2; x < 10; x++)
+        {
+          if (board[y, x] >= 0) Console.Write(" ");
+          Console.Write(board[y, x]);
+          if (x < 9) Console.Write("|");
+        }
+        Console.WriteLine("");
+        Console.WriteLine("------------------------");
+      }
     }
 
     public int IsCheck(int[,] board)
@@ -239,10 +478,12 @@ namespace chess
 
     private bool OneSideCheck(Position King, int side, int[,] board)
     {
-      // K - king
       // side: -1 is black, 1 is white
       // first one is y, second is x
       // check for knight
+
+      int[,] knightRelativeMoves = new int[8, 2] { { -2, 1 }, { -1, 2 }, { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 }, { -1, -2 }, { -2, -1 } };
+
       for (int i = 0; i < 8; i++)
       {
         if (board[King.y + knightRelativeMoves[i, 0], King.x + knightRelativeMoves[i, 1]] == -2 * side) return true;
@@ -339,68 +580,6 @@ namespace chess
       }
       // if not check, return false
       return false;
-    }
-
-    public Position[] FindPieces(int piece, int[,] board)
-    {
-      // finds the positions of the pieces to find
-      List<Position> found = new List<Position>();
-      for (int y = 2; y < 10; y++)
-      {
-        for (int x = 2; x < 10; x++)
-        {
-          if (board[y, x] == piece)
-          {
-            Position pos = new Position();
-            pos.x = x;
-            pos.y = y;
-            found.Add(pos);
-          }
-        }
-      }
-      // return an array
-      return found.ToArray();
-    }
-
-    public Position ConvertPos(string move)
-    {
-      // move - a2
-      Position pos = new Position();
-      pos.x = (char.ToUpper(move[0])) - 63; // converts character to its alphabet integer position
-      pos.y = int.Parse(move[1].ToString()) + 1;
-      return pos;
-    }
-
-    private int[,] NewBoard()
-    {
-      int[,] board = new int[12, 12] {
-        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
-        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
-        {7, 7, 4, 2, 3, 5, 6, 3, 2, 4, 7, 7},
-        {7, 7, 1, 0, 1, 1, 1, 1, 1, 1, 7, 7},
-        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
-        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
-        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
-        {7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7},
-        {7, 7,-1,-1,-1,-1,-1,-1,-1,-1, 7, 7},
-        {7, 7,-4,-2,-3,-5,-6,-3,-2,-4, 7, 7},
-        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
-        {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7}
-      };
-      return board;
-    }
-
-    public void DisplayBoard(int[,] board)
-    {
-      Console.Clear();
-      for (int y = 2; y < 10; y++)
-      {
-        for (int x = 2; x < 10; x++)
-        {
-          Console.Write("{0} ", board[y, x]);
-        }
-        Console.WriteLine("");
-      }
     }
   }
 }

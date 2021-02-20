@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 namespace chess
 {
@@ -8,19 +9,36 @@ namespace chess
     {
       Game game1 = new Game(false);
 
-      // game1.DisplayBoard(game1.BOARD);
+      int respone = 0;
 
-      Position[] positions = game1.AvailableMoves(game1.ConvertPos("c1"), game1.BOARD);
-
-      foreach (Position pos in positions)
+      while (respone != 2 && respone != -2)
       {
-        Console.Write(pos.x);
-        Console.Write(" ");
-        Console.Write(pos.y);
-        Console.WriteLine("");
+        game1.DisplayBoard(game1.BOARD);
+        string legalFrom = Console.ReadLine();
+        string legalTo = Console.ReadLine();
+        respone = game1.Move(game1.ConvertPos(legalFrom), game1.ConvertPos(legalTo), game1.BOARD);
+        Console.WriteLine(respone);
+
+        Thread.Sleep(1000);
       }
 
-      // Console.WriteLine(game1.IsCheck(game1.BOARD));
+      // Position[][][] positions = game1.GetBlackMoves(game1.BOARD);
+
+      // foreach (var item in positions)
+      // {
+      //   Console.WriteLine("------------");
+      //   foreach (Position pos in item[0])
+      //   {
+      //     Console.WriteLine(game1.ConvertPos(pos));
+      //   }
+
+      //   Console.WriteLine("---");
+
+      //   foreach (Position pos in item[1])
+      //   {
+      //     Console.WriteLine(game1.ConvertPos(pos));
+      //   }
+      // }
     }
   }
 }
