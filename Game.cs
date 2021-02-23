@@ -23,6 +23,14 @@ namespace chess
     // but it's flipped: white is top, black is bottom (easier this way)
     public int[,] BOARD;
 
+    private bool a1RookHasMoved = false;
+    private bool h1RookHasMoved = false;
+    private bool a8RookHasMoved = false;
+    private bool h8RookHasMoved = false;
+
+    private bool whiteKingHasMoved = false;
+    private bool blackKingHasMoved = false;
+
     public Game(bool withAi)
     {
       if (withAi) throw new Exception("Ai is not supported yet");
